@@ -1,0 +1,5 @@
+func main() void {
+    i32 example = 1;
+
+    *(0x1000) = 123;
+}

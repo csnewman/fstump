@@ -7,6 +7,9 @@ namespace FStump
         static void Main(string[] args)
         {
             Console.WriteLine("Hello World!");
+            
+            var compiler = new FStumpCompiler();
+            compiler.Compile("../../../example.fss", "example.s");
         }
     }
 }
