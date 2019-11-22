@@ -1,148 +1,117 @@
 grammar FStump;
 
 entry
-    : function* EOF
+    : element* EOF
+    ;
+
+element
+    : function #functionElement
+    | globalDec #globalDecElement
+    ;
+
+globalDec
+    : identifier ASSIGN numberLiteral SEMI #literalGlobalDec
+    | identifier ASSIGN LBRACK numberLiteral RBRACK SEMI #blockGlobalDec
+    | identifier ASSIGN LBRACE numberLiteral (COMMA numberLiteral)* RBRACE SEMI #arrayGlobalDec
     ;
 
 function
-    : FUNC identifier LPAREN function_args? RPAREN return_type=type block
+    : FUNC identifier LPAREN functionArgs? RPAREN LBRACE statement* RBRACE
     ;
 
-function_args
-    : function_arg (COMMA function_arg)*
+functionArgs
+    : functionArg (COMMA functionArg)*
     ;
 
-block
-    : LBRACE statement* RBRACE
+functionArg
+    : identifier
     ;
 
 statement
-    : type identifier SEMI #emptyVariableDefStatement
-    | type identifier ASSIGN expression SEMI #assignVariableDefStatement
-    | identifier ADD_ASSIGN expression SEMI #addVariableStatement
-    | MUL LPAREN expression RPAREN ASSIGN expression SEMI #rawAssignStatement
-    | block #blockStatement
+    : NOP SEMI #nopStatement
+    | LOCAL identifier SEMI #localStatement
+    | name=identifier COLON #labelStatement
+    | GOTO label=identifier SEMI #gotoStatement
+    | GOTO LPAREN cond=identifier RPAREN lab=identifier SEMI #gotoCondStatement
+    | CMP left=register right=register SEMI #cmpRegStatement
+    | CMP left=register right=numberLiteral SEMI #cmpLitStatement
+    | TEST left=register right=register SEMI #testRegStatement
+    | TEST left=register right=numberLiteral SEMI #testLitStatement
+    | dest=register ASSIGN val=identifier SEMI #loadStatement
+    | dest=register ASSIGN val=numberLiteral SEMI #setStatement
+    | MUL dest=register ASSIGN src=register SEMI #storeRegStatement
+    | dest=register ASSIGN left=register LSHIFT right=numberLiteral SEMI #lshiftStatement
+    | dest=register LSHIFT left=register LSHIFT right=numberLiteral SEMI #lshiftStatement
+    | dest=register ASSIGN left=register ADD right=register SEMI #addRegStatement
+    | dest=register ADD_ASSIGN val=register SEMI #addAssignRegStatement
+    | dest=register ASSIGN left=register ADD right=numberLiteral SEMI #addLitStatement
+    | dest=register ADD_ASSIGN val=numberLiteral SEMI #addAssignLitStatement
+    | (target=register ASSIGN)? identifier LPAREN callArgs? RPAREN SEMI #callStatement
+    | RETURN register SEMI #returnStatement
     ;
 
-expression
-    : conditionalOrExpression
+callArgs
+    : callArg (COMMA callArg)*
     ;
 
-conditionalOrExpression
-	:	conditionalAndExpression #bypassConditionalOrExpression
-	|	left=conditionalOrExpression '||' right=conditionalAndExpression #defaultConditionalOrExpression
-	;
-
-conditionalAndExpression
-	:	inclusiveOrExpression #bypassConditionalAndExpression
-	|	left=conditionalAndExpression '&&' right=inclusiveOrExpression #defaultConditionalAndExpression
-	;
-
-inclusiveOrExpression
-	:	exclusiveOrExpression #bypassInclusiveOrExpression
-	|	left=inclusiveOrExpression '|' right=exclusiveOrExpression #defaultInclusiveOrExpression
-	;
-
-exclusiveOrExpression
-	:	andExpression #bypassExclusiveOrExpression
-	|	left=exclusiveOrExpression '^' right=andExpression #defaultExclusiveOrExpression
-	;
-
-andExpression
-	:	equalityExpression #bypassAndExpression
-	|	left=andExpression '&' right=equalityExpression #defaultAndExpression
-	;
-
-equalityExpression
-	:	relationalExpression #bypassEqualityExpression
-	|	left=equalityExpression '==' right=relationalExpression #equalEqualityExpression
-	|	left=equalityExpression '!=' right=relationalExpression #notEqualEqualityExpression
-	;
-
-relationalExpression
-	:	shiftExpression #bypassRelationalExpression
-	|	left=relationalExpression '<' right=shiftExpression #ltRelationalExpression
-	|	left=relationalExpression '>' right=shiftExpression #gtRelationalExpression
-	|	left=relationalExpression '<=' right=shiftExpression #lteRelationalExpression
-	|	left=relationalExpression '>=' right=shiftExpression #gteRelationalExpression
-	;
-
-shiftExpression
-	:	additiveExpression #bypassShiftExpression
-	|	left=shiftExpression '<' '<' right=additiveExpression #leftShiftExpression
-	|	left=shiftExpression '>' '>' right=additiveExpression #rightShiftExpression
-	|	left=shiftExpression '>' '>' '>' right=additiveExpression #specialRightShiftExpression
-	;
-
-additiveExpression
-	:	multiplicativeExpression #bypassAdditiveExpression
-	|	left=additiveExpression '+' right=multiplicativeExpression #addAdditiveExpression
-	|	left=additiveExpression '-' right=multiplicativeExpression #subtractAdditiveExpression
-	;
-
-multiplicativeExpression
-	:	castExpression #bypassMultiplicativeExpression
-	|	left=multiplicativeExpression '*' right=castExpression #multMultiplicativeExpression
-	|	left=multiplicativeExpression '/' right=castExpression #divMultiplicativeExpression
-	|	left=multiplicativeExpression '%' right=castExpression #modMultiplicativeExpression
-	;
-
-castExpression
-	: unaryExpression #bypassCastExpression
-	| '(' type ')' unaryExpression #defaultCastExpression
-	;
-
-unaryExpression
-	: baseExpression #bypassUnaryExpression
-	| '-' baseExpression #negateUnaryExpression
-    | '!' baseExpression #notUnaryExpression
-	;
-
-baseExpression
-	: number_literal #numberBaseExpression
-	| '(' expression ')' #subExpressionBaseExpression
-	| identifier #variableBaseExpression
-	| '--' identifier #preDecBaseExpression
-	| '++' identifier #preIncBaseExpression
-	| identifier '--' #postDecBaseExpression
-	| identifier '++' #postIncBaseExpression
-//	|	fieldAccess
-//	|	methodInvocation
-	;
-
-function_arg
-    : type identifier
-    ;
-
-type
-    : VOID      #voidType
-    | BOOL      #boolType
-    | I16       #i16Type
-    | I32       #i32Type
-    | type '*'  #ptrType
+callArg
+    : identifier #idenCallArg
+    | register #regCallArg
     ;
 
 identifier
     : IDENTIFIER
     ;
 
-number_literal
-    : DECIMAL_LITERAL
-    | HEX_LITERAL
-    | OCT_LITERAL
-    | BINARY_LITERAL
+register
+    : ZERO #zeroRegister
+    | R1 #r1Register
+    | R2 #r2Register
+    | R3 #r3Register
+    | RR #rrRegister
+    | LR #lrRegister
+    | SF #sfRegister
+    | PC #pcRegister
+    ;
+
+numberLiteral
+    : DECIMAL_LITERAL #decimalNumberLiteral
+    | HEX_LITERAL #hexNumberLiteral
+    | OCT_LITERAL #octNumberLiteral
+    | BINARY_LITERAL #binaryNumberLiteral
+    | CHAR_LITERAL #charNumberLiteral
     ;
 
 WS:             [ \t\r\n\u000C]+ -> channel(HIDDEN);
-FUNC:           'func';
+COMMENT:        '/*' .*? '*/'    -> channel(HIDDEN);
+LINE_COMMENT:   '//' ~[\r\n]*    -> channel(HIDDEN);
 
-VOID:           'void';
-BOOL:           'bool';
-I8:             'i8';
-I16:            'i16';
-I32:            'i32';
-I64:            'i64';
-I128:           'i128';
+FUNC:           'func';
+GOTO:           'goto';
+CMP:            'cmp';
+TEST:           'test';
+NOP:            'nop';
+RETURN:         'return';
+LOCAL:          'local';
+
+ZERO:           'ZERO';
+R1:             'R1';
+R2:             'R2';
+R3:             'R3';
+RR:             'RR';
+LR:             'LR';
+SF:             'SF';
+PC:             'PC';
+
+MUL:            '*';
+ASSIGN:         '=';
+ADD:            '+';
+ADD_ASSIGN:     '+=';
+LSHIFT:         '<<';
+LSHIFT_ASSIGN:  '<<=';
+SUB:            '-';
+SUB_ASSIGN:     '-=';
+
 
 LPAREN:         '(';
 RPAREN:         ')';
@@ -152,42 +121,7 @@ LBRACK:         '[';
 RBRACK:         ']';
 SEMI:           ';';
 COMMA:          ',';
-DOT:            '.';
-
-ASSIGN:         '=';
-GT:             '>';
-LT:             '<';
-BANG:           '!';
-TILDE:          '~';
-QUESTION:       '?';
 COLON:          ':';
-EQUAL:          '==';
-LE:             '<=';
-GE:             '>=';
-NOTEQUAL:       '!=';
-AND:            '&&';
-OR:             '||';
-INC:            '++';
-DEC:            '--';
-ADD:            '+';
-SUB:            '-';
-MUL:            '*';
-DIV:            '/';
-BITAND:         '&';
-BITOR:          '|';
-CARET:          '^';
-MOD:            '%';
-ADD_ASSIGN:     '+=';
-SUB_ASSIGN:     '-=';
-MUL_ASSIGN:     '*=';
-DIV_ASSIGN:     '/=';
-AND_ASSIGN:     '&=';
-OR_ASSIGN:      '|=';
-XOR_ASSIGN:     '^=';
-MOD_ASSIGN:     '%=';
-LSHIFT_ASSIGN:  '<<=';
-RSHIFT_ASSIGN:  '>>=';
-URSHIFT_ASSIGN: '>>>=';
 
 IDENTIFIER:         Letter LetterOrDigit*;
 
@@ -196,14 +130,7 @@ HEX_LITERAL:        '0' [xX] [0-9a-fA-F] ([0-9a-fA-F_]* [0-9a-fA-F])? [lL]?;
 OCT_LITERAL:        '0' '_'* [0-7] ([0-7_]* [0-7])? [lL]?;
 BINARY_LITERAL:     '0' [bB] [01] ([01_]* [01])? [lL]?;
 
-BOOL_LITERAL:       'true'
-            |       'false'
-            ;
-
 CHAR_LITERAL:       '\'' (~['\\\r\n] | EscapeSequence) '\'';
-
-STRING_LITERAL:     '"' (~["\\\r\n] | EscapeSequence)* '"';
-
 
 fragment EscapeSequence
     : '\\' [btnfr"'\\]
