@@ -1,21 +1,36 @@
 using System;
+using System.Collections.Generic;
 using Antlr4.Runtime;
 
 namespace FStump
 {
     public class FStumpCompiler
     {
-        public const string G1 = "r1";
-        public const string G2 = "r2";
-        public const string G3 = "r3";
-        public const string UNUSED = "r4";
-        public const string SP = "r5";
-        public const string SF = "r6";
-        public const string PC = "r7";
+        public const string ZERO = "r0"; // Always zero
+        public const string G1 = "r1"; // User register
+        public const string G2 = "r2"; // User register
+        public const string G3 = "r3"; // User register
+        public const string RR = "r4"; // Reserved for compiler calculations (not safe for user)
+        public const string LR = "r5"; // Link return
+        public const string SF = "r6"; // Stack frame
+        public const string PC = "r7"; // Program counter
+
+        public const string GlobalPrefix = "GLOBAL_";
+//        public const string LocalPrefix = "LOCAL_";
+        public const string FuncPrefix = "FUNC_";
+        public const string LabelPrefix = "LABEL_";
+
+        public const int MaxImm = 31;
         
         private StumpWriter Writer { get; set; }
 
-        private StackFrame StackFrame { get; set; }
+        private IList<string> GlobalNames { get; set; }
+        private IList<string> FunctionNames { get; set; }
+        
+        
+        private IList<string> LocalNames { get; set; }
+
+        private int _uniqueNumber = 0;
         
         public void Compile(string input, string output)
         {
@@ -28,220 +43,386 @@ namespace FStump
 
             Writer.WriteBlankLine();
             Writer.WriteComment("Setup and jump");
-            Writer.WriteMovImme(SP, "stack_start");
+            Writer.WriteOrg("0");
+            Writer.WriteMovImme(LR, "program_exit");
             Writer.WriteMovImme(SF, "stack_start");
 
-            // Store pointer
-            Writer.WriteMovImme(G1, "program_exit");
-            Writer.WriteAddImme(SP, SP, "1");
-            Writer.WriteStore(G1, SP);
-            Writer.WriteAddImme(SP, SP, "1");
+            Writer.WriteBranch(BranchConditions.Always, $"{FuncPrefix}main");
 
             Writer.WriteComment("Loop based noop exit");
             Writer.WriteLabel("program_exit");
             Writer.WriteNop();
-            Writer.WriteBranch(StumpWriter.BranchCondition.Always, "program_exit");
+            Writer.WriteBranch(BranchConditions.Always, "program_exit");
 
-            HandleEntry(parser.entry());
+            var entry = parser.entry();
+            
+            GlobalNames = new List<string>();
+            FunctionNames = new List<string>();
 
+            // Pass 1: Find identifiers
+            foreach (var context in entry.element())
+            {
+                switch (context)
+                {
+                    case FStumpParser.FunctionElementContext function:
+                        FunctionNames.Add(function.function().identifier().GetText());
+                        break;
+                    case FStumpParser.GlobalDecElementContext globalDec:
+                        HandleGlobalDecElement(globalDec.globalDec());
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(context));
+                }
+            }
+
+            // Pass 2: Generate functions
+            foreach (var context in entry.element())
+            {
+                switch (context)
+                {
+                    case FStumpParser.FunctionElementContext function:
+                        HandleFunction(function.function());
+                        break;
+                    case FStumpParser.GlobalDecElementContext _:
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(context));
+                }
+            }
+            
             Writer.WriteBlankLine();
             Writer.WriteComment("Stack");
             Writer.WriteLabel("stack_start");
-            Writer.WriteData("0");
+            Writer.WriteData(0);
 
             Console.WriteLine();
             Console.WriteLine("-----------------------------");
             Writer.Print();
         }
 
-        private void HandleEntry(FStumpParser.EntryContext context)
+        private void HandleGlobalDecElement(FStumpParser.GlobalDecContext context)
         {
-            foreach (var functionContext in context.function())
+            Writer.WriteBlankLine();
+            switch (context)
             {
-                HandleFunction(functionContext);
+                case FStumpParser.ArrayGlobalDecContext array:
+                {
+                    var name = array.identifier().GetText();
+                    Writer.WriteComment($"Global {name}");
+
+                    GlobalNames.Add(name);
+                    Writer.WriteLabel($"{GlobalPrefix}{name}");
+                    foreach (var literalContext in array.numberLiteral())
+                        Writer.WriteData(ParseNumberLiteral(literalContext));
+                    break;
+                }
+                case FStumpParser.BlockGlobalDecContext block:
+                {
+                    var name = block.identifier().GetText();
+                    Writer.WriteComment($"Global {name}");
+
+                    GlobalNames.Add(name);
+                    Writer.WriteLabel($"{GlobalPrefix}{name}");
+                    for (var i = 0; i < ParseNumberLiteral(block.numberLiteral()); i++)
+                    {
+                        Writer.WriteData(0);
+                    }
+                    break;
+                }
+                case FStumpParser.LiteralGlobalDecContext literal:
+                {
+                    var name = literal.identifier().GetText();
+                    Writer.WriteComment($"Global {name}");
+
+                    GlobalNames.Add(name);
+                    Writer.WriteLabel($"{GlobalPrefix}{name}");
+                    Writer.WriteData(ParseNumberLiteral(literal.numberLiteral()));
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(context));
             }
         }
 
         private void HandleFunction(FStumpParser.FunctionContext context)
         {
-            var functionName = context.identifier().GetText();
-
             Writer.WriteBlankLine();
-            Writer.WriteComment($"Function start {functionName}");
-
-            var oldWriter = Writer;
-            
-            Writer = new StumpWriter();
-            StackFrame = new StackFrame();
-
-            HandleBlock(context.block());
-
-            StackFrame.WriteFrame(oldWriter);
-
-            oldWriter.WriteComment("Function body");
-            oldWriter.WriteWriter(Writer);
-            Writer = oldWriter;
-            
-            Writer.WriteComment($"Function end {functionName}");
             Writer.WriteBlankLine();
-        }
 
-        private void HandleBlock(FStumpParser.BlockContext context)
-        {
+            var name = context.identifier().GetText();
+            Writer.WriteComment($"--- Function {name} Start ---");
+
+            // Process
+            LocalNames = new List<string>();
+
+            if (context.functionArgs() != null)
+            {
+                foreach (var arg in context.functionArgs().functionArg())
+                {
+                    LocalNames.Add(arg.identifier().GetText());
+                }
+            }
+
             foreach (var statement in context.statement())
             {
                 switch (statement)
                 {
-//                    case FStumpParser.AddVariableStatementContext addVariableStatementContext:
-//                        break;
-                    case FStumpParser.AssignVariableDefStatementContext assignVariableDefStatementContext:
+                    case FStumpParser.LocalStatementContext local:
                     {
-                        var type = ConvertType(assignVariableDefStatementContext.type());
-                        var name = assignVariableDefStatementContext.identifier().GetText();
-                        StackFrame.AddVariable(name, type);
-                        
-                        
+                        LocalNames.Add(local.identifier().GetText());
                         break;
                     }
-//                    case FStumpParser.BlockStatementContext blockStatementContext:
-//                        break;
-//                    case FStumpParser.EmptyVariableDefStatementContext emptyVariableDefStatementContext:
-//                        break;
-//                    case FStumpParser.RawAssignStatementContext rawAssignStatementContext:
-//                        break;
+                }
+            }
+
+            // Write method entry
+            Writer.WriteLabel($"{FuncPrefix}{name}");
+
+            var skipBlankLine = false;
+            foreach (var statement in context.statement())
+            {
+                if (!skipBlankLine) Writer.WriteBlankLine();
+                switch (statement)
+                {
+                    case FStumpParser.AddAssignLitStatementContext addAssignLitStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.AddAssignRegStatementContext addAssignReg:
+                    {
+                        var src = ParseRegister(addAssignReg.val);
+                        var dest = ParseRegister(addAssignReg.dest);
+                        Writer.WriteComment($"Adding {src} to {dest}");
+                        Writer.WriteAddReg(dest, dest, src);
+                        break;
+                    }
+                    case FStumpParser.AddLitStatementContext addLitStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.AddRegStatementContext addRegStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.CallStatementContext callStatementContext:
+                        Writer.Print();
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.CmpLitStatementContext cmpLitStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.CmpRegStatementContext cmpRegStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.GotoCondStatementContext gotoCondStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.GotoStatementContext gotoStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.LabelStatementContext labelStatement:
+                    {
+                        var labelName = labelStatement.name.GetText();
+                        Writer.WriteComment($"User label {labelName}");
+                        Writer.WriteLabel($"{LabelPrefix}{labelName}");
+                        // TODO: Is no-op needed, hopefully label clashes shouldn't occur
+                        Writer.WriteNop();
+                        break;
+                    }
+                    case FStumpParser.LoadStatementContext loadStatement:
+                        HandleLoadStatement(loadStatement);
+                        break;
+                    case FStumpParser.LocalStatementContext _:
+                        skipBlankLine = true;
+                        break;
+                    case FStumpParser.LshiftStatementContext lshiftStatement:
+                        HandleLshiftStatement(lshiftStatement);
+                        break;
+                    case FStumpParser.NopStatementContext _:
+                        Writer.WriteNop();
+                        break;
+                    case FStumpParser.ReturnStatementContext returnStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.SetStatementContext setStatement:
+                        HandleSetStatement(setStatement);
+                        break;
+                    case FStumpParser.StoreRegStatementContext storeReg:
+                    {
+                        var src = ParseRegister(storeReg.src);
+                        var dest = ParseRegister(storeReg.dest);
+                        Writer.WriteComment($"Storing {src} to addr in {dest}");
+                        Writer.WriteStore(src, dest);
+                        break;
+                    }
+                    case FStumpParser.TestLitStatementContext testLitStatementContext:
+                        throw new NotImplementedException();
+                        break;
+                    case FStumpParser.TestRegStatementContext testRegStatementContext:
+                        throw new NotImplementedException();
+                        break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(statement));
                 }
             }
+            
+            Writer.WriteComment($"--- Function {name} End ---");
         }
 
-        private void HandleExpression(FStumpParser.ExpressionContext context)
+        private void HandleLoadStatement(FStumpParser.LoadStatementContext context)
         {
-//            context.()
+            var source = context.identifier().GetText();
+            var dest = ParseRegister(context.dest);
+
+            if (GlobalNames.Contains(source))
+            {
+                Writer.WriteComment($"Loading global {source} into {dest}");
+
+                var label1 = GenerateLabel();
+                Writer.WriteBranch(BranchConditions.Always, label1);
+                
+                // Place global address into a close mem location
+                var label2 = GenerateLabel();
+                Writer.WriteLabel(label2);
+                Writer.WriteData($"{GlobalPrefix}{source}");
+
+                // Load close mem location to get full address
+                Writer.WriteLabel(label1);
+                Writer.WriteLoadLabel(dest, label2);
+                Writer.WriteLoad(dest, dest);
+            }
+            else if (LocalNames.Contains(source))
+            {
+                Writer.WriteComment($"Loading local {source} into {dest}");
+
+                var index = LocalNames.IndexOf(source);
+
+                if (index > MaxImm)
+                {
+                    throw new NotImplementedException("32 locals only supported for now");
+                }
+                
+                Writer.WriteLoad(dest, SF, index.ToString());
+            }
+            else
+            {
+                throw new ArgumentException($"Unknown variable {source}");
+            }
         }
 
-        private void HandleConditionalOrExpression(FStumpParser.ConditionalOrExpressionContext context)
+        private void HandleLshiftStatement(FStumpParser.LshiftStatementContext context)
+        {
+            var shift = ParseNumberLiteral(context.right);
+            var dest = ParseRegister(context.dest);
+            var src = ParseRegister(context.left);
+
+            Writer.WriteComment($"Left shifting {src} by {shift} into {dest}");
+            
+            if (shift == 0)
+            {
+                Writer.WriteMovReg(dest, src);
+                return;
+            }
+
+            Writer.WriteAddReg(dest, src, src);
+            for (var i = 0; i < shift - 1; i++)
+            {
+                Writer.WriteAddReg(dest, dest, dest);
+            }
+        }
+
+        private void HandleSetStatement(FStumpParser.SetStatementContext context)
+        {
+            var value = ParseNumberLiteral(context.val);
+            var dest = ParseRegister(context.register());
+
+            if (value > MaxImm)
+            {
+                throw new NotImplementedException("Only small literals supported for now");
+            }
+            
+            Writer.WriteComment($"Setting {dest} to {value}");
+            Writer.WriteMovImme(dest, value.ToString());
+        }
+
+        private string GenerateLabel()
+        {
+            return $"autogen_{_uniqueNumber++}";
+        }
+
+        private int ParseNumberLiteral(FStumpParser.NumberLiteralContext context)
         {
             switch (context)
             {
-                case FStumpParser.BypassConditionalOrExpressionContext bypassConditionalOrExpressionContext:
-                    HandleConditionalAndExpression(bypassConditionalOrExpressionContext.conditionalAndExpression());
+                case FStumpParser.BinaryNumberLiteralContext binaryNumber:
+                    return Convert.ToInt32(binaryNumber.GetText().Substring(2), 2);
+                case FStumpParser.CharNumberLiteralContext charNumberLiteralContext:
+                    throw new NotImplementedException();
                     break;
-//                case FStumpParser.DefaultConditionalOrExpressionContext defaultConditionalOrExpressionContext:
-//                    break;
+                case FStumpParser.DecimalNumberLiteralContext decimalNumber:
+                    return Convert.ToInt32(decimalNumber.GetText());
+                case FStumpParser.HexNumberLiteralContext hexNumber:
+                    return Convert.ToInt32(hexNumber.GetText(), 16);
+                case FStumpParser.OctNumberLiteralContext octNumberLiteralContext:
+                    throw new NotImplementedException();
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(context));
             }
         }
 
-        private void HandleConditionalAndExpression(FStumpParser.ConditionalAndExpressionContext context)
+        private string ParseRegister(FStumpParser.RegisterContext context)
         {
             switch (context)
             {
-                case FStumpParser.BypassConditionalAndExpressionContext bypassConditionalAndExpressionContext:
-                    HandleInclusiveOrExpression(bypassConditionalAndExpressionContext.inclusiveOrExpression());
-                    break;
-//                case FStumpParser.DefaultConditionalAndExpressionContext defaultConditionalAndExpressionContext:
-//                    break;
+                case FStumpParser.LrRegisterContext _:
+                    return LR;
+                case FStumpParser.PcRegisterContext _:
+                    return PC;
+                case FStumpParser.R1RegisterContext _:
+                    return G1;
+                case FStumpParser.R2RegisterContext _:
+                    return G2;
+                case FStumpParser.R3RegisterContext _:
+                    return G3;
+                case FStumpParser.RrRegisterContext _:
+                    return RR;
+                case FStumpParser.SfRegisterContext _:
+                    return SF;
+                case FStumpParser.ZeroRegisterContext _:
+                    return ZERO;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(context));
             }
         }
 
-        private void HandleInclusiveOrExpression(FStumpParser.InclusiveOrExpressionContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.BypassInclusiveOrExpressionContext bypassInclusiveOrExpressionContext:
-                    HandleExclusiveOrExpression(bypassInclusiveOrExpressionContext.exclusiveOrExpression());
-                    break;
-//                case FStumpParser.DefaultInclusiveOrExpressionContext defaultInclusiveOrExpressionContext:
-//                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
-
-        private void HandleExclusiveOrExpression(FStumpParser.ExclusiveOrExpressionContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.BypassExclusiveOrExpressionContext bypassExclusiveOrExpressionContext:
-                    HandleAndExpression(bypassExclusiveOrExpressionContext.andExpression());
-                    break;
-//                case FStumpParser.DefaultExclusiveOrExpressionContext defaultExclusiveOrExpressionContext:
-//                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
-
-        private void HandleAndExpression(FStumpParser.AndExpressionContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.BypassAndExpressionContext bypassAndExpressionContext:
-                    HandleEqualityExpression(bypassAndExpressionContext.equalityExpression());
-                    break;
-//                case FStumpParser.DefaultAndExpressionContext defaultAndExpressionContext:
-//                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
-
-        private void HandleEqualityExpression(FStumpParser.EqualityExpressionContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.BypassEqualityExpressionContext bypassEqualityExpressionContext:
-                    break;
-//                case FStumpParser.EqualEqualityExpressionContext equalEqualityExpressionContext:
-//                    break;
-//                case FStumpParser.NotEqualEqualityExpressionContext notEqualEqualityExpressionContext:
-//                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
-
-        private void HandleRelationalExpression(FStumpParser.RelationalExpressionContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.BypassRelationalExpressionContext bypassRelationalExpressionContext:
-                    break;
-//                case FStumpParser.GteRelationalExpressionContext gteRelationalExpressionContext:
-//                    break;
-//                case FStumpParser.GtRelationalExpressionContext gtRelationalExpressionContext:
-//                    break;
-//                case FStumpParser.LteRelationalExpressionContext lteRelationalExpressionContext:
-//                    break;
-//                case FStumpParser.LtRelationalExpressionContext ltRelationalExpressionContext:
-//                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
-        
-        private DataType ConvertType(FStumpParser.TypeContext context)
-        {
-            switch (context)
-            {
-                case FStumpParser.I16TypeContext i16TypeContext:
-                    return new DataType(PrimitiveType.I16, 0);
-                case FStumpParser.I32TypeContext i32TypeContext:
-                    return new DataType(PrimitiveType.I32, 0);
-                case FStumpParser.I8TypeContext i8TypeContext:
-                    return new DataType(PrimitiveType.I8, 0);
-                case FStumpParser.PtrTypeContext ptrTypeContext:
-                    var innerType = ConvertType(ptrTypeContext.type());
-                    return new DataType(innerType.PrimitiveType, innerType.PointerDepth + 1);
-                case FStumpParser.VoidTypeContext voidTypeContext:
-                    return new DataType(PrimitiveType.Void, 0);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(context));
-            }
-        }
+//        private void HandleEntry(FStumpParser.EntryContext context)
+//        {
+//            foreach (var functionContext in context.function())
+//            {
+//                HandleFunction(functionContext);
+//            }
+//        }
+//
+//        private void HandleFunction(FStumpParser.FunctionContext context)
+//        {
+//            var functionName = context.identifier().GetText();
+//
+//            Writer.WriteBlankLine();
+//            Writer.WriteComment($"Function start {functionName}");
+//
+//            var oldWriter = Writer;
+//            
+//            Writer = new StumpWriter();
+//            StackFrame = new StackFrame();
+//
+//            HandleBlock(context.block());
+//
+//            StackFrame.WriteFrame(oldWriter);
+//
+//            oldWriter.WriteComment("Function body");
+//            oldWriter.WriteWriter(Writer);
+//            Writer = oldWriter;
+//            
+//            Writer.WriteComment($"Function end {functionName}");
+//            Writer.WriteBlankLine();
+//        }
     }
 }

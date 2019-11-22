@@ -22,6 +22,11 @@ namespace FStump
             OutputBuilder.AppendLine($"; {msg}");
         }
 
+        public void WriteOrg(string pos)
+        {
+            OutputBuilder.AppendLine($"org {pos}");
+        }
+
         public void WriteLabel(string name)
         {
             OutputBuilder.Append($"{name} ");
@@ -29,7 +34,12 @@ namespace FStump
 
         public void WriteData(string value)
         {
-            OutputBuilder.Append($"DEFW {value}");
+            OutputBuilder.AppendLine($"DEFW {value}");
+        }
+
+        public void WriteData(int value)
+        {
+            OutputBuilder.AppendLine($"DEFW {value}");
         }
 
         public void WriteNop()
@@ -151,20 +161,15 @@ namespace FStump
         {
             OutputBuilder.AppendLine($"ld {dest}, [{addrA}{(string.IsNullOrWhiteSpace(addrB) ? "" : $", {addrB}")}{ConvertShiftOp(shift)}]");
         }
-
-        public void WriteBranch(BranchCondition condition, string label)
+        
+        public void WriteLoadLabel(string dest, string label)
         {
-            switch (condition)
-            {
-                case BranchCondition.Always:
-                    OutputBuilder.AppendLine($"bal {label}");
-                    break;
-                case BranchCondition.Never:
-                    OutputBuilder.AppendLine($"bnv {label}");
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(condition), condition, null);
-            }
+            OutputBuilder.AppendLine($"ld {dest}, {label}");
+        }
+
+        public void WriteBranch(string condition, string label)
+        {
+            OutputBuilder.AppendLine($"b{condition} {label}");
         }
 
         private string ConvertShiftOp(ShiftOp op)
@@ -182,12 +187,6 @@ namespace FStump
                 default:
                     throw new ArgumentOutOfRangeException(nameof(op), op, null);
             }
-        }
-
-        public enum BranchCondition
-        {
-            Always,
-            Never
         }
 
         public void WriteWriter(StumpWriter writer)
