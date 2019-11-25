@@ -3,10 +3,15 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>netcoreapp2.2</TargetFramework>
+        <RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
+        <IlcDisableReflection>true</IlcDisableReflection>
+        <IlcOptimizationPreference>Size</IlcOptimizationPreference>
+        <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Antlr4.Runtime.Standard" Version="4.7.2" />
+      <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="1.0.0-alpha-*" />
     </ItemGroup>
 
 </Project>
