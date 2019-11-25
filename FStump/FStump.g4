@@ -60,6 +60,8 @@ statement
     | dest=register ASSIGN AMP val=identifier SEMI #loadAddrStatement
     | dest=register ASSIGN left=register AMP right=numberLiteral SEMI #andLitStatement
     | dest=register ASSIGN left=register AMP right=register SEMI #andRegStatement
+    | dest=register ASSIGN left=register OR right=numberLiteral SEMI #orLitStatement
+    | dest=register ASSIGN left=register OR right=register SEMI #orRegStatement
     ;
 
 callArgs
@@ -140,6 +142,7 @@ SEMI:           ';';
 COMMA:          ',';
 COLON:          ':';
 AMP:            '&';
+OR:             '|';
 
 IDENTIFIER:         Letter LetterOrDigit*;
 

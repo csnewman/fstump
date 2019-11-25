@@ -372,6 +372,24 @@ namespace FStump
                         Writer.WriteStore(valReg, baseReg, offReg);
                         break;
                     }
+                    case FStumpParser.OrLitStatementContext orLitStatement:
+                    {
+                        var srcA = ParseRegister(orLitStatement.left);
+                        var val = ParseNumberLiteral(orLitStatement.right);
+                        var dest = ParseRegister(orLitStatement.dest);
+                        Writer.WriteComment($"Oring {srcA} with {val} to {dest}");
+                        Writer.WriteOrImme(dest, srcA, val.ToString());
+                        break;
+                    }
+                    case FStumpParser.OrRegStatementContext orRegStatement:
+                    {
+                        var srcA = ParseRegister(orRegStatement.left);
+                        var srcB = ParseRegister(orRegStatement.right);
+                        var dest = ParseRegister(orRegStatement.dest);
+                        Writer.WriteComment($"Oring {srcA} with {srcB} to {dest}");
+                        Writer.WriteOrReg(dest, srcA, srcB);
+                        break;
+                    }
                     case FStumpParser.ReturnStatementContext returnStatementContext:
                         throw new NotImplementedException();
                         break;
