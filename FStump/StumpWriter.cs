@@ -6,10 +6,12 @@ namespace FStump
     public class StumpWriter
     {
         private StringBuilder OutputBuilder { get; set; }
+        private int InstructionCount { get; set; }
 
         public StumpWriter()
         {
             OutputBuilder = new StringBuilder();
+            InstructionCount = 0;
         }
 
         public void WriteBlankLine()
@@ -35,16 +37,19 @@ namespace FStump
         public void WriteData(string value)
         {
             OutputBuilder.AppendLine($"DEFW {value}");
+            InstructionCount++;
         }
 
         public void WriteData(int value)
         {
             OutputBuilder.AppendLine($"DEFW {value}");
+            InstructionCount++;
         }
 
         public void WriteNop()
         {
             OutputBuilder.AppendLine($"nop");
+            InstructionCount++;
         }
 
         public void WriteAddReg(string dest, string srcA, string srcB, ShiftOp shift = ShiftOp.None, bool updateStatus = false)
@@ -80,26 +85,31 @@ namespace FStump
         public void WriteMovReg(string dest, string srcB, ShiftOp shift = ShiftOp.None, bool updateStatus = false)
         {
             OutputBuilder.AppendLine($"mov{(updateStatus ? "s" : "")} {dest}, {srcB}{ConvertShiftOp(shift)}");
+            InstructionCount++;
         }
 
         public void WriteCmpReg(string dest, string srcB, ShiftOp shift = ShiftOp.None)
         {
             OutputBuilder.AppendLine($"cmp {dest}, {srcB}{ConvertShiftOp(shift)}");
+            InstructionCount++;
         }
 
         public void WriteTstReg(string dest, string srcB, ShiftOp shift = ShiftOp.None)
         {
             OutputBuilder.AppendLine($"tst {dest}, {srcB}{ConvertShiftOp(shift)}");
+            InstructionCount++;
         }
 
         public void WriteNegReg(string dest, string srcB, ShiftOp shift = ShiftOp.None)
         {
             OutputBuilder.AppendLine($"neg {dest}, {srcB}{ConvertShiftOp(shift)}");
+            InstructionCount++;
         }
 
         private void WriteType1(string op, string dest, string srcA, string srcB, ShiftOp shift = ShiftOp.None, bool updateStatus = false)
         {
             OutputBuilder.AppendLine($"{op}{(updateStatus ? "s" : "")} {dest}, {srcA}, {srcB}{ConvertShiftOp(shift)}");
+            InstructionCount++;
         }
 
         public void WriteAddImme(string dest, string srcA, string imme, bool updateStatus = false)
@@ -135,46 +145,55 @@ namespace FStump
         public void WriteMovImme(string dest, string imme, bool updateStatus = false)
         {
             OutputBuilder.AppendLine($"mov{(updateStatus ? "s" : "")} {dest}, #{imme}");
+            InstructionCount++;
         }
 
         public void WriteCmpImme(string dest, string imme)
         {
             OutputBuilder.AppendLine($"cmp {dest}, #{imme}");
+            InstructionCount++;
         }
 
         public void WriteTstImme(string dest, string imme)
         {
             OutputBuilder.AppendLine($"tst {dest}, #{imme}");
+            InstructionCount++;
         }
 
         private void WriteType2(string op, string dest, string srcA, string imme, bool updateStatus = false)
         {
             OutputBuilder.AppendLine($"{op}{(updateStatus ? "s" : "")} {dest}, {srcA}, #{imme}");
+            InstructionCount++;
         }
 
         public void WriteStore(string value, string addrA, string addrB = null, ShiftOp shift = ShiftOp.None)
         {
             OutputBuilder.AppendLine($"st {value}, [{addrA}{(string.IsNullOrWhiteSpace(addrB) ? "" : $", {addrB}")}{ConvertShiftOp(shift)}]");
+            InstructionCount++;
         }
         
         public void WriteStoreLabel(string value, string label)
         {
             OutputBuilder.AppendLine($"st {value}, {label}");
+            InstructionCount++;
         }
 
         public void WriteLoad(string dest, string addrA, string addrB = null, ShiftOp shift = ShiftOp.None)
         {
             OutputBuilder.AppendLine($"ld {dest}, [{addrA}{(string.IsNullOrWhiteSpace(addrB) ? "" : $", {addrB}")}{ConvertShiftOp(shift)}]");
+            InstructionCount++;
         }
         
         public void WriteLoadLabel(string dest, string label)
         {
             OutputBuilder.AppendLine($"ld {dest}, {label}");
+            InstructionCount++;
         }
 
         public void WriteBranch(string condition, string label)
         {
             OutputBuilder.AppendLine($"b{condition} {label}");
+            InstructionCount++;
         }
 
         private string ConvertShiftOp(ShiftOp op)
@@ -197,6 +216,7 @@ namespace FStump
         public void WriteWriter(StumpWriter writer)
         {
             OutputBuilder.Append(writer.Write());
+            InstructionCount += writer.InstructionCount;
         }
 
         public string Write()
@@ -207,6 +227,9 @@ namespace FStump
         public void Print()
         {
             Console.WriteLine(OutputBuilder.ToString());
+            Console.WriteLine("-----------");
+            Console.WriteLine($"Instruction count: {InstructionCount} ({InstructionCount / 8000f * 100:0.00}% Usage)");
+            
         }
         
         public enum ShiftOp
