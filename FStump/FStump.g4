@@ -17,15 +17,15 @@ globalDec
     ;
 
 function
-    : FUNC identifier LPAREN functionArgs? RPAREN LBRACE statement* RBRACE
+    : FUNC identifier LPAREN functionArgs? RPAREN functionResult? LBRACE statement* RBRACE
     ;
 
 functionArgs
-    : functionArg (COMMA functionArg)*
+    : identifier (COMMA identifier)*
     ;
 
-functionArg
-    : identifier
+functionResult
+    : identifier (COMMA identifier)*
     ;
 
 statement
@@ -53,8 +53,8 @@ statement
     | dest=register SUB_ASSIGN val=register SEMI #subAssignRegStatement
     | dest=register ASSIGN left=register SUB right=numberLiteral SEMI #subLitStatement
     | dest=register SUB_ASSIGN val=numberLiteral SEMI #subAssignLitStatement
-    | (target=register ASSIGN)? identifier LPAREN callArgs? RPAREN SEMI #callStatement
-    | RETURN register SEMI #returnStatement
+    | (target=callResults ASSIGN)? identifier LPAREN callArgs? RPAREN SEMI #callStatement
+    | RETURN SEMI #returnStatement
     | base=register LBRACK off=register RBRACK ASSIGN val=register SEMI #offsetRegStoreStatement
     | dest=register ASSIGN base=register LBRACK off=register RBRACK SEMI #offsetRegLoadStatement
     | dest=register ASSIGN AMP val=identifier SEMI #loadAddrStatement
@@ -72,6 +72,10 @@ callArg
     : identifier #idenCallArg
     | register #regCallArg
     | numberLiteral #litCallArg
+    ;
+
+callResults
+    : register (COMMA register)*
     ;
 
 identifier

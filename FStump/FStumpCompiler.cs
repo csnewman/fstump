@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Antlr4.Runtime;
 
 namespace FStump
@@ -28,10 +29,10 @@ namespace FStump
         private StumpWriter Writer { get; set; }
 
         private IList<string> GlobalNames { get; set; }
-        private IDictionary<string, int> FunctionNames { get; set; }
+        private IDictionary<string, (int args, int results)> FunctionNames { get; set; }
         
         
-        private IList<string> LocalNames { get; set; }
+        private List<string> LocalNames { get; set; }
 
         private int _uniqueNumber = 0;
         
@@ -65,7 +66,7 @@ namespace FStump
                 var entry = parser.entry();
 
                 GlobalNames = new List<string>();
-                FunctionNames = new Dictionary<string, int>();
+                FunctionNames = new Dictionary<string, (int, int)>();
 
                 // Pass 1: Find identifiers
                 foreach (var context in entry.element())
@@ -82,7 +83,8 @@ namespace FStump
                                 throw new ArgumentException($"Function {name} already exists");
                             }
 
-                            FunctionNames.Add(name, innerFunction.functionArgs()?.functionArg()?.Length ?? 0);
+                            FunctionNames.Add(name, (innerFunction.functionArgs()?.identifier()?.Length ?? 0,
+                                innerFunction.functionResult()?.identifier()?.Length ?? 0));
                             break;
                         }
                         case FStumpParser.GlobalDecElementContext globalDec:
@@ -196,12 +198,16 @@ namespace FStump
             // Process
             LocalNames = new List<string>();
 
+            if (context.functionResult() != null)
+            {
+                LocalNames.AddRange(context.functionResult()?.identifier().Select(x => x.GetText()).ToList() ??
+                                    new List<string>());
+            }
+
             if (context.functionArgs() != null)
             {
-                foreach (var arg in context.functionArgs().functionArg())
-                {
-                    LocalNames.Add(arg.identifier().GetText());
-                }
+                LocalNames.AddRange(context.functionArgs()?.identifier().Select(x => x.GetText()).ToList() ??
+                                    new List<string>());
             }
 
             foreach (var statement in context.statement())
@@ -311,15 +317,13 @@ namespace FStump
                         break;
                     }
                     case FStumpParser.GotoCondStatementContext gotoCond:
-                    {
+                        Writer.WriteComment($"Jumping to {gotoCond.lab.GetText()} if {gotoCond.cond.GetText()}");
                         Writer.WriteBranch(gotoCond.cond.GetText(), $"{LabelPrefix}{name}_{gotoCond.lab.GetText()}");
                         break;
-                    }
                     case FStumpParser.GotoStatementContext gotoS:
-                    {
+                        Writer.WriteComment($"Jumping to {gotoS.label.GetText()}");
                         Writer.WriteBranch(BranchConditions.Always, $"{LabelPrefix}{name}_{gotoS.label.GetText()}");
                         break;
-                    }
                     case FStumpParser.LabelStatementContext labelStatement:
                     {
                         var labelName = labelStatement.name.GetText();
@@ -390,8 +394,9 @@ namespace FStump
                         Writer.WriteOrReg(dest, srcA, srcB);
                         break;
                     }
-                    case FStumpParser.ReturnStatementContext returnStatementContext:
-                        throw new NotImplementedException();
+                    case FStumpParser.ReturnStatementContext _:
+                        Writer.WriteComment("Returning");
+                        Writer.WriteMovReg(PC, LR);
                         break;
                     case FStumpParser.SetStatementContext setStatement:
                         HandleSetStatement(setStatement);
@@ -468,7 +473,8 @@ namespace FStump
                 }
             }
             
-            Writer.WriteComment("Jumping back");
+            Writer.WriteBlankLine();
+            Writer.WriteComment("Failsafe return");
             Writer.WriteMovReg(PC, LR);
             
             Writer.WriteComment($"--- Function {name} End ---");
@@ -545,7 +551,7 @@ namespace FStump
                 Writer.WriteStore(source, LR);
                 Writer.WriteLoadLabel(LR, label3);
             }
-            else if (LocalNames.Contains(source))
+            else if (LocalNames.Contains(dest))
             {
                 Writer.WriteComment($"Storing {source} into local {dest}");
 
@@ -656,7 +662,7 @@ namespace FStump
             
             Writer.WriteComment($"Calling function {name}");
 
-            if (!FunctionNames.TryGetValue(name, out var argCount))
+            if (!FunctionNames.TryGetValue(name, out var spec))
             {
                 throw new ArgumentException($"Invalid call to {name}: Unknown function");
             }
@@ -668,11 +674,11 @@ namespace FStump
                 throw new NotImplementedException("Only calling from low local count methods support for now");
             }
 
-            var output = context.register() != null ? ParseRegister(context.register()) : ""; 
+            var outputs = context.target?.register().Select(ParseRegister).ToList() ?? new List<string>();
             
             // Save registers
             Writer.WriteComment("Saving registers");
-            Writer.WriteAddImme(SF, SF, localCount.ToString());
+            if (localCount > 0) Writer.WriteAddImme(SF, SF, localCount.ToString());
             Writer.WriteStore(G1, SF, "#0");
             Writer.WriteStore(G2, SF, "#1");
             Writer.WriteStore(G3, SF, "#2");
@@ -684,7 +690,7 @@ namespace FStump
             if (context.callArgs() != null)
             {
                 Writer.WriteComment("Copying arguments");
-                var index = 0;
+                var index = spec.results;
                 foreach (var arg in context.callArgs().callArg())
                 {
                     switch (arg)
@@ -750,9 +756,9 @@ namespace FStump
                 actualArgCount = index;
             }
 
-            if (argCount != actualArgCount)
+            if (spec.args != actualArgCount - spec.results)
             {
-                throw new ArgumentException($"Invalid call to {name}: Expected {argCount} args");
+                throw new ArgumentException($"Invalid call to {name}: Expected {spec.args} args");
             }
 
             Writer.WriteComment("Jumping");
@@ -774,17 +780,33 @@ namespace FStump
             Writer.WriteLabel(retLabelAddr);
             Writer.WriteData($"{retLabel}");
 
-            Writer.WriteComment("Restoring registers");
+            Writer.WriteComment("Copying results");
             Writer.WriteLabel(retLabel);
 
-            Writer.WriteAddImme(SF, SF, "-5");
-            if(output != G1) Writer.WriteLoad(G1, SF, "#0");
-            if(output != G2) Writer.WriteLoad(G2, SF, "#1");
-            if(output != G3) Writer.WriteLoad(G3, SF, "#2");
-            if(output != G4) Writer.WriteLoad(G4, SF, "#3");
-            if(output != LR) Writer.WriteLoad(LR, SF, "#4");
+            if (context.target != null)
+            {
+                var index = 0;
+                foreach (var targetReg in context.target.register().Select(ParseRegister))
+                {
+                    Writer.WriteLoad(targetReg, SF, $"#{index}");
+                    index++;
+                }
 
-            Writer.WriteAddImme(SF, SF, $"-{localCount.ToString()}");
+                if (index > spec.results)
+                {
+                    throw new ArgumentException($"Only expected {spec.results} return values");
+                }
+            }
+
+            Writer.WriteComment("Restoring registers");
+            Writer.WriteAddImme(SF, SF, "-5");
+            if(outputs.Contains(G1)) Writer.WriteLoad(G1, SF, "#0");
+            if(outputs.Contains(G2)) Writer.WriteLoad(G2, SF, "#1");
+            if(outputs.Contains(G3)) Writer.WriteLoad(G3, SF, "#2");
+            if(outputs.Contains(G4)) Writer.WriteLoad(G4, SF, "#3");
+            if(outputs.Contains(LR)) Writer.WriteLoad(LR, SF, "#4");
+
+            if (localCount > 0) Writer.WriteAddImme(SF, SF, $"-{localCount.ToString()}");
         }
 
         private int GetRegisterFramePos(string register)
