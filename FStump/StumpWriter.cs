@@ -156,6 +156,11 @@ namespace FStump
         {
             OutputBuilder.AppendLine($"st {value}, [{addrA}{(string.IsNullOrWhiteSpace(addrB) ? "" : $", {addrB}")}{ConvertShiftOp(shift)}]");
         }
+        
+        public void WriteStoreLabel(string value, string label)
+        {
+            OutputBuilder.AppendLine($"st {value}, {label}");
+        }
 
         public void WriteLoad(string dest, string addrA, string addrB = null, ShiftOp shift = ShiftOp.None)
         {
