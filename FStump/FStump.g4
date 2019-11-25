@@ -49,6 +49,10 @@ statement
     | dest=register ADD_ASSIGN val=register SEMI #addAssignRegStatement
     | dest=register ASSIGN left=register ADD right=numberLiteral SEMI #addLitStatement
     | dest=register ADD_ASSIGN val=numberLiteral SEMI #addAssignLitStatement
+    | dest=register ASSIGN left=register SUB right=register SEMI #subRegStatement
+    | dest=register SUB_ASSIGN val=register SEMI #subAssignRegStatement
+    | dest=register ASSIGN left=register SUB right=numberLiteral SEMI #subLitStatement
+    | dest=register SUB_ASSIGN val=numberLiteral SEMI #subAssignLitStatement
     | (target=register ASSIGN)? identifier LPAREN callArgs? RPAREN SEMI #callStatement
     | RETURN register SEMI #returnStatement
     | base=register LBRACK off=register RBRACK ASSIGN val=register SEMI #offsetRegStoreStatement

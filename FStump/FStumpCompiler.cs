@@ -389,6 +389,46 @@ namespace FStump
                     case FStumpParser.StoreStatementContext storeStatement:
                         HandleStoreStatement(storeStatement);
                         break;
+                    case FStumpParser.SubAssignLitStatementContext subAssignLitStatement:
+                    {
+                        var val = ParseNumberLiteral(subAssignLitStatement.val);
+                        var dest = ParseRegister(subAssignLitStatement.dest);
+                        
+                        if (val > MaxImm)
+                        {
+                            throw new NotImplementedException("Only small locals supported for now");
+                        }
+                        
+                        Writer.WriteComment($"Subtracting {val} from {dest}");
+                        Writer.WriteSubtractImme(dest, dest, val.ToString());
+                        break;
+                    }
+                    case FStumpParser.SubAssignRegStatementContext subAssignRegStatement:
+                    {
+                        var src = ParseRegister(subAssignRegStatement.val);
+                        var dest = ParseRegister(subAssignRegStatement.dest);
+                        Writer.WriteComment($"Subtracting {src} to {dest}");
+                        Writer.WriteSubtractReg(dest, dest, src);
+                        break;
+                    }
+                    case FStumpParser.SubLitStatementContext subLitStatement:
+                    {
+                        var srcA = ParseRegister(subLitStatement.left);
+                        var val = ParseNumberLiteral(subLitStatement.right);
+                        var dest = ParseRegister(subLitStatement.dest);
+                        Writer.WriteComment($"Subtracting {srcA} with {val} to {dest}");
+                        Writer.WriteSubtractImme(dest, srcA, val.ToString());
+                        break;
+                    }
+                    case FStumpParser.SubRegStatementContext subRegStatement:
+                    {
+                        var srcA = ParseRegister(subRegStatement.left);
+                        var srcB = ParseRegister(subRegStatement.right);
+                        var dest = ParseRegister(subRegStatement.dest);
+                        Writer.WriteComment($"Subtracting {srcA} with {srcB} to {dest}");
+                        Writer.WriteSubtractReg(dest, srcA, srcB);
+                        break;
+                    }
                     case FStumpParser.TestLitStatementContext testLitStatement:
                     {
                         var srcA = ParseRegister(testLitStatement.left);
