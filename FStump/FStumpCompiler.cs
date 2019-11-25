@@ -248,12 +248,24 @@ namespace FStump
                         Writer.WriteAddReg(dest, dest, src);
                         break;
                     }
-                    case FStumpParser.AddLitStatementContext addLitStatementContext:
-                        throw new NotImplementedException();
+                    case FStumpParser.AddLitStatementContext addLitStatement:
+                    {
+                        var srcA = ParseRegister(addLitStatement.left);
+                        var val = ParseNumberLiteral(addLitStatement.right);
+                        var dest = ParseRegister(addLitStatement.dest);
+                        Writer.WriteComment($"Adding {srcA} with {val} to {dest}");
+                        Writer.WriteAndImme(dest, srcA, val.ToString());
                         break;
-                    case FStumpParser.AddRegStatementContext addRegStatementContext:
-                        throw new NotImplementedException();
+                    }
+                    case FStumpParser.AddRegStatementContext addRegStatement:
+                    {
+                        var srcA = ParseRegister(addRegStatement.left);
+                        var srcB = ParseRegister(addRegStatement.right);
+                        var dest = ParseRegister(addRegStatement.dest);
+                        Writer.WriteComment($"Adding {srcA} with {srcB} to {dest}");
+                        Writer.WriteAndReg(dest, srcA, srcB);
                         break;
+                    }
                     case FStumpParser.AndLitStatementContext andLitStatement:
                     {
                         var srcA = ParseRegister(andLitStatement.left);
@@ -377,12 +389,22 @@ namespace FStump
                     case FStumpParser.StoreStatementContext storeStatement:
                         HandleStoreStatement(storeStatement);
                         break;
-                    case FStumpParser.TestLitStatementContext testLitStatementContext:
-                        throw new NotImplementedException();
+                    case FStumpParser.TestLitStatementContext testLitStatement:
+                    {
+                        var srcA = ParseRegister(testLitStatement.left);
+                        var val = ParseNumberLiteral(testLitStatement.right);
+                        Writer.WriteComment($"Testing {srcA} with {val}");
+                        Writer.WriteTstImme(srcA, val.ToString());
                         break;
-                    case FStumpParser.TestRegStatementContext testRegStatementContext:
-                        throw new NotImplementedException();
+                    }
+                    case FStumpParser.TestRegStatementContext testRegStatement:
+                    {
+                        var srcA = ParseRegister(testRegStatement.left);
+                        var srcB = ParseRegister(testRegStatement.right);
+                        Writer.WriteComment($"Testing {srcA} with {srcB}");
+                        Writer.WriteTstReg(srcA, srcB);
                         break;
+                    }
                     default:
                         throw new ArgumentOutOfRangeException(nameof(statement));
                 }
