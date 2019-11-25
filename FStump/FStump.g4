@@ -13,6 +13,7 @@ globalDec
     : identifier ASSIGN numberLiteral SEMI #literalGlobalDec
     | identifier ASSIGN LBRACK numberLiteral RBRACK SEMI #blockGlobalDec
     | identifier ASSIGN LBRACE numberLiteral (COMMA numberLiteral)* RBRACE SEMI #arrayGlobalDec
+    | identifier ASSIGN string SEMI #stringGlobalDec
     ;
 
 function
@@ -38,8 +39,10 @@ statement
     | TEST left=register right=register SEMI #testRegStatement
     | TEST left=register right=numberLiteral SEMI #testLitStatement
     | dest=register ASSIGN val=identifier SEMI #loadStatement
+    | dest=identifier ASSIGN val=register SEMI #storeStatement
     | dest=register ASSIGN val=numberLiteral SEMI #setStatement
     | MUL dest=register ASSIGN src=register SEMI #storeRegStatement
+    | dest=register ASSIGN MUL src=register SEMI #loadRegStatement
     | dest=register ASSIGN left=register LSHIFT right=numberLiteral SEMI #lshiftStatement
     | dest=register LSHIFT left=register LSHIFT right=numberLiteral SEMI #lshiftStatement
     | dest=register ASSIGN left=register ADD right=register SEMI #addRegStatement
@@ -48,6 +51,11 @@ statement
     | dest=register ADD_ASSIGN val=numberLiteral SEMI #addAssignLitStatement
     | (target=register ASSIGN)? identifier LPAREN callArgs? RPAREN SEMI #callStatement
     | RETURN register SEMI #returnStatement
+    | base=register LBRACK off=register RBRACK ASSIGN val=register SEMI #offsetRegStoreStatement
+    | dest=register ASSIGN base=register LBRACK off=register RBRACK SEMI #offsetRegLoadStatement
+    | dest=register ASSIGN AMP val=identifier SEMI #loadAddrStatement
+    | dest=register ASSIGN left=register AMP right=numberLiteral SEMI #andLitStatement
+    | dest=register ASSIGN left=register AMP right=register SEMI #andRegStatement
     ;
 
 callArgs
@@ -57,6 +65,7 @@ callArgs
 callArg
     : identifier #idenCallArg
     | register #regCallArg
+    | numberLiteral #litCallArg
     ;
 
 identifier
@@ -68,7 +77,7 @@ register
     | R1 #r1Register
     | R2 #r2Register
     | R3 #r3Register
-    | RR #rrRegister
+    | R4 #r4Register
     | LR #lrRegister
     | SF #sfRegister
     | PC #pcRegister
@@ -80,6 +89,10 @@ numberLiteral
     | OCT_LITERAL #octNumberLiteral
     | BINARY_LITERAL #binaryNumberLiteral
     | CHAR_LITERAL #charNumberLiteral
+    ;
+
+string
+    : STRING
     ;
 
 WS:             [ \t\r\n\u000C]+ -> channel(HIDDEN);
@@ -98,7 +111,7 @@ ZERO:           'ZERO';
 R1:             'R1';
 R2:             'R2';
 R3:             'R3';
-RR:             'RR';
+R4:             'R4';
 LR:             'LR';
 SF:             'SF';
 PC:             'PC';
@@ -122,6 +135,7 @@ RBRACK:         ']';
 SEMI:           ';';
 COMMA:          ',';
 COLON:          ':';
+AMP:            '&';
 
 IDENTIFIER:         Letter LetterOrDigit*;
 
@@ -131,6 +145,8 @@ OCT_LITERAL:        '0' '_'* [0-7] ([0-7_]* [0-7])? [lL]?;
 BINARY_LITERAL:     '0' [bB] [01] ([01_]* [01])? [lL]?;
 
 CHAR_LITERAL:       '\'' (~['\\\r\n] | EscapeSequence) '\'';
+
+STRING:             '"' (~['\\\r\n] | EscapeSequence)* '"';
 
 fragment EscapeSequence
     : '\\' [btnfr"'\\]
