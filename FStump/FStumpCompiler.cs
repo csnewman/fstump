@@ -263,7 +263,7 @@ namespace FStump
                         var srcB = ParseRegister(addRegStatement.right);
                         var dest = ParseRegister(addRegStatement.dest);
                         Writer.WriteComment($"Adding {srcA} with {srcB} to {dest}");
-                        Writer.WriteAndReg(dest, srcA, srcB);
+                        Writer.WriteAddReg(dest, srcA, srcB);
                         break;
                     }
                     case FStumpParser.AndLitStatementContext andLitStatement:
