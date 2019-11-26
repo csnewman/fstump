@@ -808,11 +808,11 @@ namespace FStump
 
             Writer.WriteComment("Restoring registers");
             Writer.WriteAddImme(SF, SF, "-5");
-            if(outputs.Contains(G1)) Writer.WriteLoad(G1, SF, "#0");
-            if(outputs.Contains(G2)) Writer.WriteLoad(G2, SF, "#1");
-            if(outputs.Contains(G3)) Writer.WriteLoad(G3, SF, "#2");
-            if(outputs.Contains(G4)) Writer.WriteLoad(G4, SF, "#3");
-            if(outputs.Contains(LR)) Writer.WriteLoad(LR, SF, "#4");
+            if(!outputs.Contains(G1)) Writer.WriteLoad(G1, SF, "#0");
+            if(!outputs.Contains(G2)) Writer.WriteLoad(G2, SF, "#1");
+            if(!outputs.Contains(G3)) Writer.WriteLoad(G3, SF, "#2");
+            if(!outputs.Contains(G4)) Writer.WriteLoad(G4, SF, "#3");
+            if(!outputs.Contains(LR)) Writer.WriteLoad(LR, SF, "#4");
 
             if (localCount > 0) Writer.WriteAddImme(SF, SF, $"-{localCount.ToString()}");
         }
