@@ -401,6 +401,14 @@ namespace FStump
                     case FStumpParser.SetStatementContext setStatement:
                         HandleSetStatement(setStatement);
                         break;
+                    case FStumpParser.ShiftStatementContext shiftStatement:
+                    {
+                        var src = ParseRegister(shiftStatement.src);
+                        var dest = ParseRegister(shiftStatement.dest);
+                        Writer.WriteComment($"Shifting {src} by {shiftStatement.shift().GetText()} to {dest}");
+                        Writer.WriteMovReg(dest, src, ParseShift(shiftStatement.shift()));
+                        break;
+                    }
                     case FStumpParser.StoreRegStatementContext storeReg:
                     {
                         var src = ParseRegister(storeReg.src);
@@ -825,6 +833,21 @@ namespace FStump
                     return 4;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(register));
+            }
+        }
+
+        private StumpWriter.ShiftOp ParseShift(FStumpParser.ShiftContext context)
+        {
+            switch (context)
+            {
+                case FStumpParser.AsrShiftContext _:
+                    return StumpWriter.ShiftOp.ArithmeticShiftRight;
+                case FStumpParser.RorShiftContext _:
+                    return StumpWriter.ShiftOp.ClockwiseCircularShift;
+                case FStumpParser.RrcShiftContext _:
+                    return StumpWriter.ShiftOp.ClockwiseCircularShiftCarry;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(context));
             }
         }
 

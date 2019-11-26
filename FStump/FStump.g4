@@ -62,6 +62,7 @@ statement
     | dest=register ASSIGN left=register AMP right=register SEMI #andRegStatement
     | dest=register ASSIGN left=register OR right=numberLiteral SEMI #orLitStatement
     | dest=register ASSIGN left=register OR right=register SEMI #orRegStatement
+    | dest=register ASSIGN src=register shift SEMI #shiftStatement
     ;
 
 callArgs
@@ -80,6 +81,12 @@ callResults
 
 identifier
     : IDENTIFIER
+    ;
+
+shift
+    : ASR #asrShift
+    | ROR #rorShift
+    | RRC #rrcShift
     ;
 
 register
@@ -147,6 +154,10 @@ COMMA:          ',';
 COLON:          ':';
 AMP:            '&';
 OR:             '|';
+
+ASR:            'asr';
+ROR:            'ror';
+RRC:            'rrc';
 
 IDENTIFIER:         Letter LetterOrDigit*;
 
