@@ -54,8 +54,7 @@ namespace FStump
                 Writer.WriteMovImme(SF, "stack_start_ptr");
                 Writer.WriteLoad(SF, SF);
 
-                Writer.WriteLoadLabel(G1, "main_func_ptr");
-                Writer.WriteMovReg(PC, G1);
+                Writer.WriteLoadLabel(PC, "main_func_ptr");
 
                 Writer.WriteLabel("main_func_ptr");
                 Writer.WriteData($"{FuncPrefix}main");
@@ -322,13 +321,37 @@ namespace FStump
                         break;
                     }
                     case FStumpParser.GotoCondStatementContext gotoCond:
+                    {
+                        var takeJumpLabel = GenerateLabel();
+                        var skipJumpLabel = GenerateLabel();
+                        var jmpLabel = GenerateLabel();
+
                         Writer.WriteComment($"Jumping to {gotoCond.lab.GetText()} if {gotoCond.cond.GetText()}");
-                        Writer.WriteBranch(gotoCond.cond.GetText(), $"{LabelPrefix}{name}_{gotoCond.lab.GetText()}");
+                        Writer.WriteBranch(gotoCond.cond.GetText(), takeJumpLabel);
+                        Writer.WriteBranch(BranchConditions.Always, skipJumpLabel);
+
+                        Writer.WriteLabel(takeJumpLabel);
+                        Writer.WriteLoadLabel(PC, jmpLabel);
+
+                        // Place address into a close mem location
+                        Writer.WriteLabel(jmpLabel);
+                        Writer.WriteData($"{LabelPrefix}{name}_{gotoCond.lab.GetText()}");
+
+                        Writer.WriteLabel(skipJumpLabel);
                         break;
+                    }
                     case FStumpParser.GotoStatementContext gotoS:
+                    {
                         Writer.WriteComment($"Jumping to {gotoS.label.GetText()}");
-                        Writer.WriteBranch(BranchConditions.Always, $"{LabelPrefix}{name}_{gotoS.label.GetText()}");
+                        var jmpLabel = GenerateLabel();
+
+                        Writer.WriteLoadLabel(PC, jmpLabel);
+
+                        // Place address into a close mem location
+                        Writer.WriteLabel(jmpLabel);
+                        Writer.WriteData($"{LabelPrefix}{name}_{gotoS.label.GetText()}");
                         break;
+                    }
                     case FStumpParser.LabelStatementContext labelStatement:
                     {
                         var labelName = labelStatement.name.GetText();
@@ -788,11 +811,7 @@ namespace FStump
             var retLabelAddr = GenerateLabel();
             
             Writer.WriteLoadLabel(LR, retLabelAddr);
-            
-            Writer.WriteLoadLabel(G1, jmpLabel);
-//            Writer.WriteLoad(G1, G1);
-            Writer.WriteMovReg(PC, G1);
-
+            Writer.WriteLoadLabel(PC, jmpLabel);
 
             // Place global address into a close mem location
             Writer.WriteLabel(jmpLabel);
