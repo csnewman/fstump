@@ -63,6 +63,7 @@ statement
     | dest=register ASSIGN left=register OR right=numberLiteral SEMI #orLitStatement
     | dest=register ASSIGN left=register OR right=register SEMI #orRegStatement
     | dest=register ASSIGN src=register shift SEMI #shiftStatement
+    | dest=register ASSIGN src=register SEMI #moveStatement
     ;
 
 callArgs

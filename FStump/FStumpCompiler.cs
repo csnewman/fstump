@@ -358,6 +358,14 @@ namespace FStump
                     case FStumpParser.LshiftStatementContext lshiftStatement:
                         HandleLshiftStatement(lshiftStatement);
                         break;
+                    case FStumpParser.MoveStatementContext moveStatement:
+                    {
+                        var src = ParseRegister(moveStatement.src);
+                        var dest = ParseRegister(moveStatement.dest);
+                        Writer.WriteComment($"Copying {src} to {dest}");
+                        Writer.WriteMovReg(dest, src);
+                        break;
+                    }
                     case FStumpParser.NopStatementContext _:
                         Writer.WriteNop();
                         break;
