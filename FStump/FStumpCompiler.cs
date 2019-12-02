@@ -785,8 +785,15 @@ namespace FStump
                         case FStumpParser.RegCallArgContext regCall:
                         {
                             var regName = ParseRegister(regCall.register());
-                            var offset = -5 + GetRegisterFramePos(regName);
-                            Writer.WriteLoad(G1, SF, $"#{offset}");
+                            if (regName == ZERO)
+                            {
+                                Writer.WriteMovReg(G1, ZERO);
+                            }
+                            else
+                            {
+                                var offset = -5 + GetRegisterFramePos(regName);
+                                Writer.WriteLoad(G1, SF, $"#{offset}");
+                            }
                             break;
                         }
                         default:
