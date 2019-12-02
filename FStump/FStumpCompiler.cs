@@ -804,10 +804,10 @@ namespace FStump
                     index++;
                 }
 
-                actualArgCount = index;
+                actualArgCount = index - spec.results;
             }
 
-            if (spec.args != actualArgCount - spec.results)
+            if (spec.args != actualArgCount)
             {
                 throw new ArgumentException($"Invalid call to {name}: Expected {spec.args} args");
             }
