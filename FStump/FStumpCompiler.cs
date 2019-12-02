@@ -54,7 +54,12 @@ namespace FStump
                 Writer.WriteMovImme(SF, "stack_start_ptr");
                 Writer.WriteLoad(SF, SF);
 
-                Writer.WriteBranch(BranchConditions.Always, $"{FuncPrefix}main");
+                Writer.WriteLoadLabel(G1, "main_func_ptr");
+                Writer.WriteMovReg(PC, G1);
+
+                Writer.WriteLabel("main_func_ptr");
+                Writer.WriteData($"{FuncPrefix}main");
+
                 Writer.WriteLabel("stack_start_ptr");
                 Writer.WriteData("stack_start");
 
