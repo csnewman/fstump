@@ -264,7 +264,7 @@ namespace FStump
                         var val = ParseNumberLiteral(addLitStatement.right);
                         var dest = ParseRegister(addLitStatement.dest);
                         Writer.WriteComment($"Adding {srcA} with {val} to {dest}");
-                        Writer.WriteAndImme(dest, srcA, val.ToString());
+                        Writer.WriteAddImme(dest, srcA, val.ToString());
                         break;
                     }
                     case FStumpParser.AddRegStatementContext addRegStatement:
